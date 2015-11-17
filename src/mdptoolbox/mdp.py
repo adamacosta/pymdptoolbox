@@ -1068,7 +1068,10 @@ class QLearning(MDP):
             pn = _np.random.random()
             if pn < (1 - (1 / _math.log(n + 2))):
                 # optimal_action = self.Q[s, :].max()
-                a = self.Q[s, :].argmax()
+                s_Q = self.Q[s, :]
+                a = s_Q.argmax()
+                if _np.argwhere(s_Q == s_Q[a]).shape[0] > 1:
+                    a = _np.random.choice(_np.argwhere(s_Q == s_Q[a]).flatten())
             else:
                 a = _np.random.randint(0, self.A)
 
