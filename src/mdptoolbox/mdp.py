@@ -971,6 +971,9 @@ class QLearning(MDP):
         By default we run a check on the ``transitions`` and ``rewards``
         arguments to make sure they describe a valid MDP. You can set this
         argument to True in order to skip this check.
+    learning_rate : function
+        function of n that returns the Q learning rate.
+        default is lambda n: (1 / sqrt(n + 2))
 
     Data Attributes
     ---------------
@@ -1023,7 +1026,7 @@ class QLearning(MDP):
     """
 
     def __init__(self, transitions, reward, discount, n_iter=10000,
-                 skip_check=False):
+                 skip_check=False, learning_rate=None):
         # Initialise a Q-learning MDP.
 
         # The following check won't be done in MDP()'s initialisation, so let's
@@ -1043,6 +1046,10 @@ class QLearning(MDP):
         self.R = reward
 
         self.discount = discount
+
+        self.learning_rate = learning_rate
+        if self.learning_rate is None:
+            self.learning_rate = lambda n: 1 / (_math.sqrt(n + 2))
 
         # Initialisations
         self.Q = _np.zeros((self.S, self.A))
@@ -1094,7 +1101,7 @@ class QLearning(MDP):
             # Updating the value of Q
             # Decaying update coefficient (1/sqrt(n+2)) can be changed
             delta = r + self.discount * self.Q[s_new, :].max() - self.Q[s, a]
-            dQ = (1 / _math.sqrt(n + 2)) * delta
+            dQ = self.learning_rate(n) * delta
             self.Q[s, a] = self.Q[s, a] + dQ
 
             # current state is updated
