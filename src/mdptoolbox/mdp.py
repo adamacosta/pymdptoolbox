@@ -964,6 +964,12 @@ class QLearning(MDP):
     discount : float
         Discount factor. See the documentation for the ``MDP`` class for
         details.
+    epsilon : float or callable (default 'auto')
+        The probability of greedy search at each iteration. Must be
+        between 0 and 1 if a float. Can also be a callable function 
+        of n. By default, this is 1 - (1 / log(n + 2)).
+    reinit : int (default 100)
+        Reinitialize every reinit iterations
     n_iter : int, optional
         Number of iterations to execute. This is ignored unless it is an
         integer greater than the default value. Defaut: 10,000.
@@ -1026,7 +1032,8 @@ class QLearning(MDP):
     """
 
     def __init__(self, transitions, reward, discount, n_iter=10000,
-                 skip_check=False, learning_rate=None):
+                 epsilon='auto', reinit=100, skip_check=False,
+                 learning_rate=None):
         # Initialise a Q-learning MDP.
 
         # The following check won't be done in MDP()'s initialisation, so let's
@@ -1044,8 +1051,9 @@ class QLearning(MDP):
         self.P = self._computeTransition(transitions)
 
         self.R = reward
-
         self.discount = discount
+        self.epsilon = epsilon
+        self.reinit = reinit
 
         self.learning_rate = learning_rate
         if self.learning_rate is None:
@@ -1067,13 +1075,20 @@ class QLearning(MDP):
         for n in range(1, self.max_iter + 1):
 
             # Reinitialisation of trajectories every 100 transitions
-            if (n % 100) == 0:
+            if (n % self.reinit) == 0:
                 s = _np.random.randint(0, self.S)
 
-            # Action choice : greedy with increasing probability
-            # probability 1-(1/log(n+2)) can be changed
+            # Action choice : greedy with probability that can be fixed
+            # or some increasing function of n
+            if hasattr(self.epsilon, '__call__'):
+                pthresh = self.epsilon(n)
+            elif self.epsilon == 'auto':
+                pthresh = 1 - (1 / _math.log(n + 2))
+            else:
+                pthresh = epsilon
+
             pn = _np.random.random()
-            if pn < (1 - (1 / _math.log(n + 2))):
+            if pn < pthresh:
                 # optimal_action = self.Q[s, :].max()
                 s_Q = self.Q[s, :]
                 a = s_Q.argmax()
