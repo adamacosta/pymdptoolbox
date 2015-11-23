@@ -1098,7 +1098,7 @@ class QLearning(MDP):
             elif self.epsilon == 'auto':
                 pthresh = 1 - (1 / _math.log(n + 2))
             else:
-                pthresh = epsilon
+                pthresh = self.epsilon
 
             pn = _np.random.random()
             if pn < pthresh:
