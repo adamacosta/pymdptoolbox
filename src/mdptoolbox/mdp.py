@@ -1063,6 +1063,19 @@ class QLearning(MDP):
         self.Q = _np.zeros((self.S, self.A))
         self.mean_discrepancy = []
 
+        # Determine valid actions for every state, helps in cases where some states
+        # have less actions than others, resulting in transition probabilties
+        # of zeros for those action indices for those states, resulting in
+        # some bad side effects.  A valid action for a state is one where there is
+        # a sum of 1.0 probability of transitioning to other states (or self)
+        # Data is a dict of lists, key is state, list is valid actions
+        self.valid_actions = {}
+        for s in range(self.S):
+            self.valid_actions[s] = []
+            for a in range(self.A):
+                if _np.sum(self.P[a][s, :]) == 1:
+                    self.valid_actions[s].append(a)
+
     def run(self):
         # Run the Q-learning algoritm.
         discrepancy = []
@@ -1089,13 +1102,17 @@ class QLearning(MDP):
 
             pn = _np.random.random()
             if pn < pthresh:
-                # optimal_action = self.Q[s, :].max()
                 s_Q = self.Q[s, :]
                 a = s_Q.argmax()
-                if _np.argwhere(s_Q == s_Q[a]).shape[0] > 1:
-                    a = _np.random.choice(_np.argwhere(s_Q == s_Q[a]).flatten())
+                # Randomly pick if more than single max,
+                # because argmax() only picks first occurrence
+                indices_with_max = _np.argwhere(s_Q == s_Q[a]).flatten()
+                if len(indices_with_max) > 1:
+                    valid_choices = filter(lambda a: a in self.valid_actions[a],
+                                           indices_with_max)
+                    a = _np.random.choice(valid_choices)
             else:
-                a = _np.random.randint(0, self.A)
+                a = _np.random.choice(self.valid_actions[s])
 
             # Simulating next state s_new and reward associated to <s,s_new,a>
             p_s_new = _np.random.random()
