@@ -1087,6 +1087,9 @@ class QLearning(MDP):
         # initial state choice
         s = _np.random.randint(0, self.S)
 
+        # Build a log of reward over time
+        self.reward_log = _np.zeros(self.max_iter + 1)
+
         for n in range(1, self.max_iter + 1):
 
             # Reinitialisation of trajectories every 100 transitions
@@ -1132,6 +1135,8 @@ class QLearning(MDP):
                 except IndexError:
                     r = self.R[s]
 
+            self.reward_log[n - 1] = r
+
             # Updating the value of Q
             # Decaying update coefficient (1/sqrt(n+2)) can be changed
             delta = r + self.discount * self.Q[s_new, :].max() - self.Q[s, a]
@@ -1152,6 +1157,8 @@ class QLearning(MDP):
             # compute the value function and the policy
             self.V = self.Q.max(axis=1)
             self.policy = self.Q.argmax(axis=1)
+
+        self.reward_log = self.reward_log.cumsum()
 
         self._endRun()
 
