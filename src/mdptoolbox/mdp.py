@@ -964,9 +964,9 @@ class QLearning(MDP):
     discount : float
         Discount factor. See the documentation for the ``MDP`` class for
         details.
-    epsilon : float or callable (default 'auto')
+    pthresh : float or callable (default 'auto')
         The probability of greedy search at each iteration. Must be
-        between 0 and 1 if a float. Can also be a callable function 
+        between 0 and 1 if a float. Can also be a callable function
         of n. By default, this is 1 - (1 / log(n + 2)).
     reinit : int (default 100)
         Reinitialize every reinit iterations
@@ -1032,7 +1032,7 @@ class QLearning(MDP):
     """
 
     def __init__(self, transitions, reward, discount, n_iter=10000,
-                 epsilon='auto', reinit=100, skip_check=False,
+                 pthresh='auto', reinit=100, skip_check=False,
                  learning_rate=None):
         # Initialise a Q-learning MDP.
 
@@ -1052,7 +1052,7 @@ class QLearning(MDP):
 
         self.R = reward
         self.discount = discount
-        self.epsilon = epsilon
+        self.pthresh = pthresh
         self.reinit = reinit
 
         self.learning_rate = learning_rate
@@ -1073,7 +1073,9 @@ class QLearning(MDP):
         for s in range(self.S):
             self.valid_actions[s] = []
             for a in range(self.A):
-                if _np.sum(self.P[a][s, :]) == 1:
+                # Was not accepting rows that summed to 1 due to floating
+                # point discrepancies
+                if _np.isclose(self.P[a][s, :].sum(), 1):
                     self.valid_actions[s].append(a)
 
     def run(self):
@@ -1093,12 +1095,12 @@ class QLearning(MDP):
 
             # Action choice : greedy with probability that can be fixed
             # or some increasing function of n
-            if hasattr(self.epsilon, '__call__'):
-                pthresh = self.epsilon(n)
-            elif self.epsilon == 'auto':
+            if hasattr(self.pthresh, '__call__'):
+                pthresh = self.pthresh(n)
+            elif self.pthresh == 'auto':
                 pthresh = 1 - (1 / _math.log(n + 2))
             else:
-                pthresh = self.epsilon
+                pthresh = self.pthresh
 
             pn = _np.random.random()
             if pn < pthresh:
@@ -1108,7 +1110,7 @@ class QLearning(MDP):
                 # because argmax() only picks first occurrence
                 indices_with_max = _np.argwhere(s_Q == s_Q[a]).flatten()
                 if len(indices_with_max) > 1:
-                    valid_choices = filter(lambda a: a in self.valid_actions[a],
+                    valid_choices = filter(lambda a: a in self.valid_actions[s],
                                            indices_with_max)
                     a = _np.random.choice(valid_choices)
             else:
