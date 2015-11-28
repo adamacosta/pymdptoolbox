@@ -180,7 +180,7 @@ class MDP(object):
     """
 
     def __init__(self, transitions, reward, discount, epsilon, max_iter,
-                 skip_check=False):
+                 skip_check=False, stochastic=False):
         # Initialise a MDP based on the input parameters.
 
         # if the discount is None then the algorithm is assumed to not use it
@@ -414,7 +414,7 @@ class FiniteHorizon(MDP):
     """
 
     def __init__(self, transitions, reward, discount, N, h=None,
-                 skip_check=False):
+                 skip_check=False, stochastic=False):
         # Initialise a finite horizon MDP.
         self.N = int(N)
         assert self.N > 0, "N must be greater than 0."
@@ -618,7 +618,8 @@ class PolicyIteration(MDP):
     """
 
     def __init__(self, transitions, reward, discount, policy0=None,
-                 max_iter=1000, eval_type=0, skip_check=False):
+                 max_iter=1000, eval_type=0, skip_check=False,
+                 stochastic=False):
         # Initialise a policy iteration MDP.
         #
         # Set up the MDP, but don't need to worry about epsilon values
@@ -888,7 +889,7 @@ class PolicyIterationModified(PolicyIteration):
     """
 
     def __init__(self, transitions, reward, discount, epsilon=0.01,
-                 max_iter=10, skip_check=False):
+                 max_iter=10, skip_check=False, stochastic=False):
         # Initialise a (modified) policy iteration MDP.
 
         # Maybe its better not to subclass from PolicyIteration, because the
@@ -949,6 +950,17 @@ class PolicyIterationModified(PolicyIteration):
         self._endRun()
 
 
+class BoltzmannDistribution(object):
+    def __init__(self, vals, T=None):
+        self.vals = vals
+        self.T = T
+        if self.T is None:
+            self.T = 1e6
+
+    def dist(self):
+        return _np.exp(self.vals / self.T) / _np.exp(self.vals / self.T).sum()
+
+
 class QLearning(MDP):
 
     """A discounted MDP solved using the Q learning algorithm.
@@ -992,6 +1004,9 @@ class QLearning(MDP):
     mean_discrepancy : array
         Vector of V discrepancy mean over 100 iterations. Then the length of
         this vector for the default value of N is 100 (N/100).
+    reward_log : array
+        A 1d array storing the cumulative reward received at each iteration of
+        the search.
 
     Examples
     ---------
@@ -1032,8 +1047,8 @@ class QLearning(MDP):
     """
 
     def __init__(self, transitions, reward, discount, n_iter=10000,
-                 pthresh='auto', reinit=100, skip_check=False,
-                 learning_rate=None):
+                 reinit=100, skip_check=False, pthresh=None, softmax=False,
+                 T=None, learning_rate=None, stochastic=False):
         # Initialise a Q-learning MDP.
 
         # The following check won't be done in MDP()'s initialisation, so let's
@@ -1052,12 +1067,18 @@ class QLearning(MDP):
 
         self.R = reward
         self.discount = discount
-        self.pthresh = pthresh
         self.reinit = reinit
+        self.softmax = softmax
+        self.T = T
+        self.stochastic = stochastic
+
+        self.pthresh = pthresh
+        if self.pthresh is None:
+            self.pthresh = lambda n: 1 - (1 / _math.log(n + 2))
 
         self.learning_rate = learning_rate
         if self.learning_rate is None:
-            self.learning_rate = lambda n: 1 / (_math.sqrt(n + 2))
+            self.learning_rate = lambda n: 1 / _math.sqrt(n + 2)
 
         # Initialisations
         self.Q = _np.zeros((self.S, self.A))
@@ -1098,15 +1119,14 @@ class QLearning(MDP):
 
             # Action choice : greedy with probability that can be fixed
             # or some increasing function of n
-            if hasattr(self.pthresh, '__call__'):
-                pthresh = self.pthresh(n)
-            elif self.pthresh == 'auto':
-                pthresh = 1 - (1 / _math.log(n + 2))
-            else:
-                pthresh = self.pthresh
-
+            pthresh = self.pthresh(n)
             pn = _np.random.random()
-            if pn < pthresh:
+
+            if self.softmax:
+                weights = BoltzmannDistribution(self.Q[s, :][self.valid_actions[s]],
+                                                self.T).dist()
+                a = _np.random.choice(self.valid_actions[s], p=weights)
+            elif pn < pthresh:
                 s_Q = self.Q[s, :]
                 a = s_Q.argmax()
                 # Randomly pick if more than single max,
@@ -1127,13 +1147,19 @@ class QLearning(MDP):
                 s_new = s_new + 1
                 p = p + self.P[a][s, s_new]
 
-            try:
-                r = self.R[a][s, s_new]
-            except IndexError:
+            # Stochastic rewards are given as a sample distribution per
+            # (action, new_state) pair; thus, self.R[a, s_new] returns
+            # a 1d array of possible rewards from which we choose randomly
+            if self.stochastic:
+                r = _np.random.choice(self.R[a, s_new])
+            else:
                 try:
-                    r = self.R[s, a]
+                    r = self.R[a][s, s_new]
                 except IndexError:
-                    r = self.R[s]
+                    try:
+                        r = self.R[s_new, a]
+                    except IndexError:
+                        r = self.R[s_new]
 
             self.reward_log[n - 1] = r
 
@@ -1233,7 +1259,7 @@ class RelativeValueIteration(MDP):
     """
 
     def __init__(self, transitions, reward, epsilon=0.01, max_iter=1000,
-                 skip_check=False):
+                 skip_check=False, stochastic=False):
         # Initialise a relative value iteration MDP.
 
         MDP.__init__(self,  transitions, reward, None, epsilon, max_iter,
@@ -1399,7 +1425,8 @@ class ValueIteration(MDP):
     """
 
     def __init__(self, transitions, reward, discount, epsilon=0.01,
-                 max_iter=1000, initial_value=0, skip_check=False):
+                 max_iter=1000, initial_value=0, skip_check=False,
+                 stochastic=False):
         # Initialise a value iteration MDP.
 
         MDP.__init__(self, transitions, reward, discount, epsilon, max_iter,
@@ -1560,7 +1587,8 @@ class ValueIterationGS(ValueIteration):
     """
 
     def __init__(self, transitions, reward, discount, epsilon=0.01,
-                 max_iter=10, initial_value=0, skip_check=False):
+                 max_iter=10, initial_value=0, skip_check=False,
+                 stochastic=False):
         # Initialise a value iteration Gauss-Seidel MDP.
 
         MDP.__init__(self, transitions, reward, discount, epsilon, max_iter,
