@@ -992,6 +992,12 @@ class QLearning(MDP):
     learning_rate : function
         function of n that returns the Q learning rate.
         default is lambda n: (1 / sqrt(n + 2))
+    stochastic : boolean
+        Whether rewards should be stochastic. If True, must supply a
+        reward matrix with reward distributions rather than amounts.
+    Q : array
+        Initial guess regarding Q matrix. Can be used to build upon
+        prior learning.
 
     Data Attributes
     ---------------
@@ -1048,7 +1054,7 @@ class QLearning(MDP):
 
     def __init__(self, transitions, reward, discount, n_iter=10000,
                  reinit=100, skip_check=False, pthresh=None, softmax=False,
-                 T=None, learning_rate=None, stochastic=False):
+                 T=None, learning_rate=None, stochastic=False, Q=None):
         # Initialise a Q-learning MDP.
 
         # The following check won't be done in MDP()'s initialisation, so let's
@@ -1081,7 +1087,9 @@ class QLearning(MDP):
             self.learning_rate = lambda n: 1 / _math.sqrt(n + 2)
 
         # Initialisations
-        self.Q = _np.zeros((self.S, self.A))
+        self.Q = Q
+        if self.Q == None:
+            self.Q = _np.zeros((self.S, self.A))
         self.mean_discrepancy = []
 
         # Determine valid actions for every state, helps in cases where some states
